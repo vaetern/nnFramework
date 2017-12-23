@@ -41,10 +41,11 @@ func main() {
 	// Form the training matrices.
 	inputs, labels := makeInputsAndLabels("data/train.csv")
 
-	var argNumNeurons int
+	var argNumNeurons, argNumEpochs int
 	var argRate float64
 	flag.IntVar(&argNumNeurons, "n", 1, "number of hidden neurons")
-	flag.Float64Var(&argRate, "rate", .01, "number of hidden neurons")
+	flag.Float64Var(&argRate, "rate", .01, "learning rate")
+	flag.IntVar(&argNumEpochs, "e", 1, "number of training epochs")
 	flag.Parse()
 
 	// Define our network architecture and learning parameters.
@@ -52,7 +53,7 @@ func main() {
 		inputNeurons:  4,
 		outputNeurons: 3,
 		hiddenNeurons: argNumNeurons,
-		numEpochs:     5000,
+		numEpochs:     argNumEpochs,
 		learningRate:  argRate,
 	}
 
@@ -60,6 +61,7 @@ func main() {
 	fmt.Println("Hidden neurons",config.hiddenNeurons )
 	fmt.Println("Output neurons",config.outputNeurons )
 	fmt.Println("Rate",config.learningRate )
+	fmt.Println("Epochs",config.numEpochs )
 
 	// Train the neural network.
 	network := newNetwork(config)
