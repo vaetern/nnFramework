@@ -10,6 +10,7 @@ import (
 	"log"
 	"math"
 	"math/rand"
+	"os"
 	"time"
 )
 
@@ -23,8 +24,8 @@ type NeuralNet struct {
 	BOut    *mat.Dense `json:"BOut"`
 }
 
-type portableNeuralNet struct{
-	nn NeuralNet
+type portableNeuralNet struct {
+	nn      NeuralNet
 	Config  NeuralNetConfig
 	WHidden []byte `json:"WHidden"`
 	BHidden []byte `json:"BHidden"`
@@ -88,47 +89,90 @@ func (nn *NeuralNet) Train(x, y *mat.Dense) error {
 	nn.WOut = wOut
 	nn.BOut = bOut
 
-	fmt.Println(nn)
-
 	err := storeNetworkToFile(*nn)
-	if err != nil{
+	if err != nil {
 		log.Println("failed to save trained network to file", err)
 	}
 
 	return nil
 }
 
-
-func storeNetworkToFile(net NeuralNet) (err error){
+func storeNetworkToFile(net NeuralNet) (err error) {
 	filename := time.Now().Format("2006-01-1 03-04-05") + " output.json"
 
 	//translate nn to portable version
-	bhid,_ := net.BHidden.MarshalBinary()
-	bout,_ := net.BOut.MarshalBinary()
-	whid,_ := net.WHidden.MarshalBinary()
-	wout,_ := net.WOut.MarshalBinary()
+	bhid, err := net.BHidden.MarshalBinary()
+	bout, err := net.BOut.MarshalBinary()
+	whid, err := net.WHidden.MarshalBinary()
+	wout, err := net.WOut.MarshalBinary()
+
+	if err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
+	}
 
 	portableNeuralNet := portableNeuralNet{
-		nn:net,
-		Config:net.Config,
-		BHidden:bhid,
-		BOut:bout,
-		WHidden:whid,
-		WOut:wout,
-		}
-
-	net.BHidden.MarshalBinary()
+		nn:      net,
+		Config:  net.Config,
+		BHidden: bhid,
+		BOut:    bout,
+		WHidden: whid,
+		WOut:    wout,
+	}
 
 	nnJson, _ := json.Marshal(portableNeuralNet)
 	err = ioutil.WriteFile("../results/"+filename, nnJson, 0644)
 	return err
 }
 
+func LoadNetworkFromFile(filename string) (nn *NeuralNet) {
+
+	raw, err := ioutil.ReadFile(filename)
+	if err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
+	}
+
+	var portableNeuralNet portableNeuralNet
+	json.Unmarshal(raw, &portableNeuralNet)
+
+	nn = NewNetwork(portableNeuralNet.Config)
+
+	nn.WHidden = mat.NewDense(0, 0, nil)
+	nn.BHidden = mat.NewDense(0, 0, nil)
+	nn.BOut = mat.NewDense(0, 0, nil)
+	nn.WOut = mat.NewDense(0, 0, nil)
+
+	nn.Config = portableNeuralNet.Config
+	err = nn.WOut.UnmarshalBinary(portableNeuralNet.WOut)
+	if err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
+	}
+	err = nn.WHidden.UnmarshalBinary(portableNeuralNet.WHidden)
+	if err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
+	}
+	err = nn.BOut.UnmarshalBinary(portableNeuralNet.BOut)
+	if err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
+	}
+	err = nn.BHidden.UnmarshalBinary(portableNeuralNet.BHidden)
+	if err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
+	}
+
+	return nn
+}
+
 // backpropagate completes the backpropagation method.
 func (nn *NeuralNet) backpropagate(x, y, wHidden, bHidden, wOut, bOut, output *mat.Dense) error {
 
 	prevErrorValue := .0
-	whenToShowOffset := math.Floor(float64(nn.Config.NumEpochs/20))
+	whenToShowOffset := math.Floor(float64(nn.Config.NumEpochs / 20))
 	// Loop over the number of epochs utilizing
 	// backpropagation to train our model.
 	for i := 0; i < nn.Config.NumEpochs; i++ {
@@ -193,7 +237,7 @@ func (nn *NeuralNet) backpropagate(x, y, wHidden, bHidden, wOut, bOut, output *m
 		bHidden.Add(bHidden, bHiddenAdj)
 
 		//error calculate
-		if math.Mod(float64(i), whenToShowOffset) == 0 || i == (nn.Config.NumEpochs-1){
+		if math.Mod(float64(i), whenToShowOffset) == 0 || i == (nn.Config.NumEpochs-1) {
 			var errorValue float64
 			errorValue = .0
 			for _, e := range errorAtHiddenLayer.RawMatrix().Data {

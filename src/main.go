@@ -21,15 +21,25 @@ func main() {
 
 	var argNumNeurons, argNumEpochs int
 	var argRate float64
-	var argMode string
+	var argMode, argPortableFile string
 	flag.IntVar(&argNumNeurons, "n", 1, "number of hidden neurons")
 	flag.Float64Var(&argRate, "rate", .01, "learning rate")
 	flag.IntVar(&argNumEpochs, "e", 1, "number of training epochs")
 	flag.StringVar(&argMode, "MODE", "train", "operationg mode")
+	flag.StringVar(&argPortableFile, "network-file", "", "source file with trained network params")
 	flag.Parse()
 
 	if argMode != "train" && argMode != "predict-from" {
 		log.Fatal("-MODE can be only: ", "'train', 'predict-from' <", argMode, ">")
+	}
+
+	if argMode == "predict-from"{
+		if argPortableFile == ""{
+			log.Fatal("-source-file must be specified")
+		}
+		network := nn.LoadNetworkFromFile(argPortableFile)
+		printConfig(network.Config)
+		printAccuracy(network)
 	}
 
 	if argMode == "train" {
@@ -42,58 +52,66 @@ func main() {
 			LearningRate:  argRate,
 		}
 
-		fmt.Println("Input  neurons:", config.InputNeurons)
-		fmt.Println("Hidden neurons:", config.HiddenNeurons)
-		fmt.Println("Output neurons:", config.OutputNeurons)
-		fmt.Println("Learning rate:", config.LearningRate)
-		fmt.Println("Epochs", config.NumEpochs)
-		fmt.Println("")
+		printConfig(config)
 
 		// Train the neural network.
 		network := nn.NewNetwork(config)
 		if err := network.Train(inputs, labels); err != nil {
 			log.Fatal(err)
 		}
-
-		// Form the testing matrices.
-		testInputs, testLabels := makeInputsAndLabels("../data/test.csv")
-
-		// Make the predictions using the trained model.
-		predictions, err := network.Predict(testInputs)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		// Calculate the accuracy of our model.
-		var truePosNeg int
-		numPreds, _ := predictions.Dims()
-		for i := 0; i < numPreds; i++ {
-
-			// Get the label.
-			labelRow := mat.Row(nil, i, testLabels)
-			var prediction int
-			for idx, label := range labelRow {
-				if label == 1.0 {
-					prediction = idx
-					break
-				}
-			}
-
-			// Accumulate the true positive/negative count.
-			if predictions.At(i, prediction) == floats.Max(mat.Row(nil, i, predictions)) {
-				truePosNeg++
-			}
-		}
-
-		// Calculate the accuracy (subset accuracy).
-		accuracy := float64(truePosNeg) / float64(numPreds)
-
-		// Output the Accuracy value to standard out.
-		fmt.Printf("\nAccuracy: %0.2f\n\n", accuracy)
+		printAccuracy(network)
 	}
+
+
+
 }
 
-// NewNetwork initializes a new neural network.
+func printConfig(config nn.NeuralNetConfig){
+	fmt.Println("Input  neurons:", config.InputNeurons)
+	fmt.Println("Hidden neurons:", config.HiddenNeurons)
+	fmt.Println("Output neurons:", config.OutputNeurons)
+	fmt.Println("Learning rate:", config.LearningRate)
+	fmt.Println("Epochs", config.NumEpochs)
+	fmt.Println("")
+}
+
+func printAccuracy(network *nn.NeuralNet){
+	// Form the testing matrices.
+	testInputs, testLabels := makeInputsAndLabels("../data/test.csv")
+
+	// Make the predictions using the trained model.
+	predictions, err := network.Predict(testInputs)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Calculate the accuracy of our model.
+	var truePosNeg int
+	numPreds, _ := predictions.Dims()
+	for i := 0; i < numPreds; i++ {
+
+		// Get the label.
+		labelRow := mat.Row(nil, i, testLabels)
+		var prediction int
+		for idx, label := range labelRow {
+			if label == 1.0 {
+				prediction = idx
+				break
+			}
+		}
+
+		// Accumulate the true positive/negative count.
+		if predictions.At(i, prediction) == floats.Max(mat.Row(nil, i, predictions)) {
+			truePosNeg++
+		}
+	}
+
+	// Calculate the accuracy (subset accuracy).
+	accuracy := float64(truePosNeg) / float64(numPreds)
+
+	// Output the Accuracy value to standard out.
+	fmt.Printf("\nAccuracy: %0.2f\n\n", accuracy)
+}
 
 func makeInputsAndLabels(fileName string) (*mat.Dense, *mat.Dense) {
 	// Open the dataset file.
