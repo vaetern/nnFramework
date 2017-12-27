@@ -17,7 +17,7 @@ import (
 func main() {
 
 	// Form the training matrices.
-	inputs, labels := makeInputsAndLabels("../data/train.csv")
+	inputs, labels, _ := makeInputsAndLabels("../data/train.csv")
 
 	var argNumNeurons, argNumEpochs int
 	var argRate float64
@@ -39,14 +39,14 @@ func main() {
 		}
 		network := nn.LoadNetworkFromFile(argPortableFile)
 		printConfig(network.Config)
-		printAccuracy(network)
+		printAccuracy(network,"../data/fullset.csv")
 	}
 
 	if argMode == "train" {
 		// Define our network architecture and learning parameters.
 		config := nn.NeuralNetConfig{
 			InputNeurons:  4,
-			OutputNeurons: 3,
+			OutputNeurons: 2,
 			HiddenNeurons: argNumNeurons,
 			NumEpochs:     argNumEpochs,
 			LearningRate:  argRate,
@@ -59,7 +59,7 @@ func main() {
 		if err := network.Train(inputs, labels); err != nil {
 			log.Fatal(err)
 		}
-		printAccuracy(network)
+		printAccuracy(network,"../data/test.csv")
 	}
 
 
@@ -75,9 +75,9 @@ func printConfig(config nn.NeuralNetConfig){
 	fmt.Println("")
 }
 
-func printAccuracy(network *nn.NeuralNet){
+func printAccuracy(network *nn.NeuralNet, fileName string){
 	// Form the testing matrices.
-	testInputs, testLabels := makeInputsAndLabels("../data/test.csv")
+	testInputs, testLabels, _ := makeInputsAndLabels(fileName)
 
 	// Make the predictions using the trained model.
 	predictions, err := network.Predict(testInputs)
@@ -110,10 +110,10 @@ func printAccuracy(network *nn.NeuralNet){
 	accuracy := float64(truePosNeg) / float64(numPreds)
 
 	// Output the Accuracy value to standard out.
-	fmt.Printf("\nAccuracy: %0.2f\n\n", accuracy)
+	fmt.Printf("\nAccuracy: %0.6f\n\n", accuracy)
 }
 
-func makeInputsAndLabels(fileName string) (*mat.Dense, *mat.Dense) {
+func makeInputsAndLabels(fileName string) (*mat.Dense, *mat.Dense, *map[int]string) {
 	// Open the dataset file.
 	f, err := os.Open(fileName)
 	if err != nil {
@@ -123,34 +123,40 @@ func makeInputsAndLabels(fileName string) (*mat.Dense, *mat.Dense) {
 
 	// Create a new CSV reader reading from the opened file.
 	reader := csv.NewReader(f)
+	reader.Comma = ';'
 	reader.FieldsPerRecord = 7
 
 	// Read in all of the CSV records
 	rawCSVData, err := reader.ReadAll()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(err, fileName)
 	}
 
 	// inputsData and labelsData will hold all the
 	// float values that will eventually be
 	// used to form matrices.
 	inputsData := make([]float64, 4*len(rawCSVData))
-	labelsData := make([]float64, 3*len(rawCSVData))
+	labelsData := make([]float64, 2*len(rawCSVData))
+	controlLabelData := make([]string,len(rawCSVData))
 
 	// Will track the current index of matrix values.
 	var inputsIndex int
 	var labelsIndex int
+	var controlIndex int
+
 
 	// Sequentially move the rows into a slice of floats.
-	for idx, record := range rawCSVData {
-
-		// Skip the header row.
-		if idx == 0 {
-			continue
-		}
+	for _, record := range rawCSVData {
 
 		// Loop over the float columns.
 		for i, val := range record {
+
+
+			if i == 0{//populate main identifier
+				controlLabelData[controlIndex] = val
+				controlIndex++
+				continue
+			}
 
 			// Convert the value to a float.
 			parsedVal, err := strconv.ParseFloat(val, 64)
@@ -159,7 +165,7 @@ func makeInputsAndLabels(fileName string) (*mat.Dense, *mat.Dense) {
 			}
 
 			// Add to the labelsData if relevant.
-			if i == 4 || i == 5 || i == 6 {
+			if i == 5 || i == 6 {
 				labelsData[labelsIndex] = parsedVal
 				labelsIndex++
 				continue
@@ -171,6 +177,10 @@ func makeInputsAndLabels(fileName string) (*mat.Dense, *mat.Dense) {
 		}
 	}
 	inputs := mat.NewDense(len(rawCSVData), 4, inputsData)
-	labels := mat.NewDense(len(rawCSVData), 3, labelsData)
-	return inputs, labels
+	labels := mat.NewDense(len(rawCSVData), 2, labelsData)
+	identifiers := make(map[int]string)
+	for i, val := range  controlLabelData{
+		identifiers[i] = val
+	}
+	return inputs, labels, &identifiers
 }
